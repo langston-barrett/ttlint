@@ -196,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "ttlint"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "anyhow",

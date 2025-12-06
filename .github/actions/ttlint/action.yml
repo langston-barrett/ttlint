@@ -21,7 +21,7 @@ inputs:
 runs:
   using: composite
   steps:
-  - uses: langston-barrett/ttlint/.github/actions/install-ttlint@6af604ff5df174c47208a91cdbb3da47455ca36c
+  - uses: langston-barrett/ttlint/.github/actions/install-ttlint@c0d3073e820b50f06431449600fbf0c3e9584497
     with:
       version: ${{ inputs.version }}
       target: ${{ inputs.target }}

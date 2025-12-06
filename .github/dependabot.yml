@@ -4,6 +4,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # See https://docs.zizmor.sh/audits/#dependabot-cooldown
     cooldown:
       default-days: 4
 

@@ -1,0 +1,23 @@
+name: rust ci
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    # Don't run on documentation-only changes
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: langston-barrett/gha/.github/workflows/rust-ci.yml@c1a0d0bf070930011fa45e31623ccea963f2bc7a
+    with:
+      bench: false
+      os: ubuntu-24.04

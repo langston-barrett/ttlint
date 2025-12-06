@@ -1,0 +1,36 @@
+# Usage:
+#
+#     - uses: langston-barrett/ttlint/.github/actions/ttlint@SHA
+#
+
+name: ttlint
+description: Install and run ttlint
+inputs:
+  version:
+    description: version (without the leading 'v')
+    required: false
+    default: '0.1.0'
+  target:
+    description: Target triple
+    required: false
+    default: 'x86_64-unknown-linux-gnu'
+  glob:
+    description: Paths to lint, passed to `git ls-files`
+    required: false
+    default: "**"
+runs:
+  using: composite
+  steps:
+  - uses: langston-barrett/ttlint/.github/actions/install-ttlint@f0947121956830d8ea46bcfeb1e26c6fc51e1984
+    with:
+      version: ${{ inputs.version }}
+      target: ${{ inputs.target }}
+  # Runners have 4 cores as of 2025-12
+  # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
+  - name: ttlint
+    shell: bash
+    env:
+      GLOB: ${{ inputs.glob }}
+    run: >
+      git ls-files --exclude-standard "${GLOB}" |
+      xargs --max-args 1 --max-procs 4 ttlint

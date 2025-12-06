@@ -20,7 +20,10 @@ By default, it searches for:
 - Precompiled binaries available
 - Safe, doesn't panic
 - <200 lines of code
-<!-- - GitHub actions (TODO) -->
+- GitHub actions:
+
+  - [`install-ttlint`](./.github/actions/install-ttlint/action.yml)
+  - [`ttlint`](./.github/actions/ttlint/action.yml)
 
 ## Non-Features
 

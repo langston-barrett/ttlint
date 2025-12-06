@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   ci:
-    uses: langston-barrett/gha/.github/workflows/rust-ci.yml@9137259cab1d86dbeae3bde37898a2dfe6a12130
+    uses: langston-barrett/gha/.github/workflows/rust-ci.yml@c1a0d0bf070930011fa45e31623ccea963f2bc7a
     timeout-minutes: 30
     with:
       bench: false

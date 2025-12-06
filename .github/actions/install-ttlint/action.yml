@@ -21,7 +21,7 @@ runs:
       shell: bash
       # For why `env`, see https://docs.zizmor.sh/audits/#template-injection
       env:
-        REPO: ${{ github.repository }}
+        REPO: ${{ github.action_repository }}
         TARGET: ${{ inputs.target }}
         VERSION: ${{ inputs.version }}
       run: | # zizmor: ignore[github-env]

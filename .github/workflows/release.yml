@@ -11,7 +11,7 @@ on:
 
 jobs:
   release:
-    uses: langston-barrett/gha/.github/workflows/rust-release.yml@edd880b5448475bd00b1136cb875c13d8dd506f4
+    uses: langston-barrett/gha/.github/workflows/rust-release.yml@e9a0541869681c30de7e16c4f7b70f03c23dd472
     permissions:
       contents: write
     secrets:

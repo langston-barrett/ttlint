@@ -12,6 +12,8 @@ By default, it searches for:
 - Git merge conflict markers
 - Carriage return (`\r`)
 
+It also checks that files end in exactly one newline.
+
 ## Features
 
 - Checks for the presence of certain substrings

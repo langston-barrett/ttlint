@@ -65,8 +65,11 @@ pub(crate) fn lint_bytes<W: Write>(
         writeln!(writer, "{}:1:1: UTF-8 byte-order mark", path.display())?;
     }
     let fixed = if bad && fix { &contents[3..] } else { contents };
-    let (pat_bad, fixed) = lint_patterns(path, fixed, pats, writer, fix)?;
+    let (pat_bad, mut fixed) = lint_patterns(path, fixed, pats, writer, fix)?;
     bad |= pat_bad;
+    let eof_bad = lint_eof(path, &mut fixed, writer, fix)?;
+    bad |= eof_bad;
+
     Ok((bad, fixed))
 }
 
@@ -138,6 +141,33 @@ pub(crate) fn lint_patterns<W: Write>(
     Ok((bad, fixed))
 }
 
+fn lint_eof<W: Write>(
+    path: &Path,
+    fixed: &mut Vec<u8>,
+    writer: &mut W,
+    fix: bool,
+) -> Result<bool, anyhow::Error> {
+    let mut bad = false;
+    let trailing_newlines = fixed.iter().rev().take_while(|&&b| b == b'\n').count();
+    if trailing_newlines != 1 {
+        bad = true;
+        let line = fixed.iter().filter(|&&b| b == b'\n').count() + 1;
+        let msg = if trailing_newlines == 0 {
+            "missing end-of-file newline"
+        } else {
+            "multiple end-of-file newlines"
+        };
+        writeln!(writer, "{}:{}:{}: {}", path.display(), line, 1, msg)?;
+
+        if fix {
+            let non_newline_end = fixed.iter().rposition(|&b| b != b'\n').map_or(0, |i| i + 1);
+            fixed.truncate(non_newline_end);
+            fixed.push(b'\n');
+        }
+    }
+    Ok(bad)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,26 +176,30 @@ mod tests {
     #[test]
     fn ok() {
         let path = Path::new("test.txt");
-        let contents = b"hello world";
+        let contents = b"hello world\n";
         let pats = vec![];
         let mut output = Vec::new();
 
         let (bad, fixed) = lint_bytes(path, contents, &pats, &mut output, true).unwrap();
         let fixed_str = String::from_utf8(fixed).unwrap();
-        expect![[r#"hello world"#]].assert_eq(&fixed_str);
+        expect![[r#"hello world
+"#]]
+        .assert_eq(&fixed_str);
         assert!(!bad);
     }
 
     #[test]
     fn bom() {
         let path = Path::new("test.txt");
-        let contents = b"\xEF\xBB\xBFhello world";
+        let contents = b"\xEF\xBB\xBFhello world\n";
         let pats = vec![];
         let mut output = Vec::new();
 
         let (bad, fixed) = lint_bytes(path, contents, &pats, &mut output, true).unwrap();
         let fixed_str = String::from_utf8(fixed).unwrap();
-        expect![[r#"hello world"#]].assert_eq(&fixed_str);
+        expect![[r#"hello world
+"#]]
+        .assert_eq(&fixed_str);
         assert!(bad);
     }
 
@@ -229,6 +263,63 @@ next line
 and  here
 "#]]
         .assert_eq(&fixed_str);
+        assert!(bad);
+    }
+
+    #[test]
+    fn eof_newline_ok() {
+        let path = Path::new("test.txt");
+        let contents = b"hello world\n";
+        let pats = vec![];
+        let mut output = Vec::new();
+
+        let (bad, fixed) = lint_bytes(path, contents, &pats, &mut output, false).unwrap();
+        let fixed_str = String::from_utf8(fixed).unwrap();
+        expect![[r#"hello world
+"#]]
+        .assert_eq(&fixed_str);
+        assert!(!bad);
+    }
+
+    #[test]
+    fn eof_newline_missing() {
+        let path = Path::new("test.txt");
+        let contents = b"hello world";
+        let pats = vec![];
+        let mut output = Vec::new();
+
+        let (bad, fixed) = lint_bytes(path, contents, &pats, &mut output, true).unwrap();
+        let fixed_str = String::from_utf8(fixed).unwrap();
+        expect![[r#"hello world
+"#]]
+        .assert_eq(&fixed_str);
+        assert!(bad);
+    }
+
+    #[test]
+    fn eof_newline_multiple() {
+        let path = Path::new("test.txt");
+        let contents = b"hello world\n\n\n";
+        let pats = vec![];
+        let mut output = Vec::new();
+
+        let (bad, fixed) = lint_bytes(path, contents, &pats, &mut output, true).unwrap();
+        let fixed_str = String::from_utf8(fixed).unwrap();
+        expect![[r#"hello world
+"#]]
+        .assert_eq(&fixed_str);
+        assert!(bad);
+    }
+
+    #[test]
+    fn eof_newline_empty_file() {
+        let path = Path::new("test.txt");
+        let contents = b"";
+        let pats = vec![];
+        let mut output = Vec::new();
+
+        let (bad, fixed) = lint_bytes(path, contents, &pats, &mut output, true).unwrap();
+        assert_eq!(fixed, b"");
         assert!(bad);
     }
 }

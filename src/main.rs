@@ -80,7 +80,7 @@ pub(crate) fn lint_patterns<W: Write>(
     let mut bad = false;
     let mut pats = vec!["\n<<<<<<<", "\n=======", "\n>>>>>>>", " \n", "\t\n", "\r"];
     let default_pat_count = pats.len();
-    pats.extend(user_pats.iter().map(|s| s.as_str()));
+    pats.extend(user_pats.iter().map(String::as_str));
     let ac =
         aho_corasick::AhoCorasick::new(&pats).context("Failed to build Aho-Corasick automaton")?;
 

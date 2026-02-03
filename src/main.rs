@@ -70,6 +70,12 @@ pub(crate) fn lint_bytes<W: Write>(
     Ok((bad, fixed))
 }
 
+struct Position {
+    offset: usize,
+    line: usize,
+    col: usize,
+}
+
 pub(crate) fn lint_patterns<W: Write>(
     path: &Path,
     contents: &[u8],
@@ -87,6 +93,12 @@ pub(crate) fn lint_patterns<W: Write>(
     let mut fixed = Vec::with_capacity(contents.len());
     let mut last_end = 0;
 
+    let mut cursor = Position {
+        offset: 0,
+        line: 1,
+        col: 1,
+    };
+
     for mat in ac.find_iter(contents) {
         let mut pos = mat.start();
         let end = mat.end();
@@ -98,13 +110,27 @@ pub(crate) fn lint_patterns<W: Write>(
         }
 
         bad = true;
-        let line = contents[..pos].iter().filter(|&&b| b == b'\n').count() + 1;
-        let col = contents[..pos]
+        let contents_since_last_match = &contents[cursor.offset..pos];
+        let lines_since_last_match = contents_since_last_match
+            .iter()
+            .filter(|&&b| b == b'\n')
+            .count();
+        let chars_since_last_line = contents_since_last_match
             .iter()
             .rev()
             .take_while(|&&b| b != b'\n')
-            .count()
-            + 1;
+            .count();
+
+        let line = cursor.line + lines_since_last_match;
+        let col = if lines_since_last_match == 0 {
+            chars_since_last_line + cursor.col
+        } else {
+            chars_since_last_line + 1
+        };
+
+        cursor.offset = pos;
+        cursor.line = line;
+        cursor.col = col;
 
         let msg = match pat_idx {
             0 => "merge conflict start marker",

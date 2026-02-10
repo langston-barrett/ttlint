@@ -19,7 +19,7 @@ By default, it searches for:
 - `--fix` mode available
 - Precompiled binaries available
 - Safe, doesn't panic
-- <200 lines of code
+- <300 lines of code
 - GitHub actions:
 
   - [`install-ttlint`](./.github/actions/install-ttlint/action.yml)

@@ -12,6 +12,7 @@ homepage = "https://github.com/langston-barrett/ttlint"
 aho-corasick = "1.1.4"
 anyhow = "1"
 clap = { version = "4.6", features = ["derive"] }
+memchr = "2"
 
 [dev-dependencies]
 expect-test = "1.5"
@@ -20,6 +21,7 @@ expect-test = "1.5"
 [profile.release]
 codegen-units = 1
 lto = "fat"
+panic = "abort"
 
 # https://github.com/mstange/samply#turn-on-debug-info-for-full-stacks
 [profile.profiling]

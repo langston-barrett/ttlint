@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use memchr::memchr_iter;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -40,9 +41,19 @@ fn main() -> Result<()> {
 
     let stderr = std::io::stderr();
     let mut writer = std::io::BufWriter::new(stderr.lock());
+    let mut contents = Vec::new();
+    let mut fixed = Vec::new();
     let mut bad = false;
     for file_path in &args.files {
-        let file_bad = lint_file(file_path, &ac, &pats, args.fix, &mut writer)?;
+        let file_bad = lint_file(
+            file_path,
+            &ac,
+            &pats,
+            args.fix,
+            &mut writer,
+            &mut contents,
+            &mut fixed,
+        )?;
         if file_bad {
             writer.flush()?;
             bad = true;
@@ -60,19 +71,21 @@ fn lint_file<W: Write>(
     pats: &[&str],
     fix: bool,
     writer: &mut W,
+    contents: &mut Vec<u8>,
+    fixed: &mut Vec<u8>,
 ) -> Result<bool> {
     let mut file =
         fs::File::open(path).with_context(|| format!("Failed to open file: {}", path.display()))?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)
+    contents.clear();
+    file.read_to_end(contents)
         .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
-    let (bad, fixed) = lint_bytes(path, contents.as_slice(), ac, pats, writer, fix)?;
+    let bad = lint_bytes(path, contents.as_slice(), ac, pats, writer, fix, fixed)?;
 
     if fix && fixed.len() != contents.len() {
         let mut file = fs::File::create(path)
             .with_context(|| format!("Failed to open file for writing: {}", path.display()))?;
-        file.write_all(&fixed)
+        file.write_all(fixed)
             .with_context(|| format!("Failed to write file: {}", path.display()))?;
     }
     Ok(bad)
@@ -85,15 +98,16 @@ pub(crate) fn lint_bytes<W: Write>(
     pats: &[&str],
     writer: &mut W,
     fix: bool,
-) -> std::result::Result<(bool, Vec<u8>), anyhow::Error> {
+    fixed: &mut Vec<u8>,
+) -> std::result::Result<bool, anyhow::Error> {
     let mut bad = contents.starts_with(&[0xEF, 0xBB, 0xBF]);
     if bad {
         writeln!(writer, "{}:1:1: UTF-8 byte-order mark", path.display())?;
     }
-    let fixed = if bad && fix { &contents[3..] } else { contents };
-    let (pat_bad, fixed) = lint_patterns(path, fixed, ac, pats, writer, fix)?;
+    let input = if bad && fix { &contents[3..] } else { contents };
+    let pat_bad = lint_patterns(path, input, ac, pats, writer, fix, fixed)?;
     bad |= pat_bad;
-    Ok((bad, fixed))
+    Ok(bad)
 }
 
 pub(crate) fn lint_patterns<W: Write>(
@@ -103,14 +117,14 @@ pub(crate) fn lint_patterns<W: Write>(
     pats: &[&str],
     writer: &mut W,
     fix: bool,
-) -> Result<(bool, Vec<u8>), anyhow::Error> {
+    fixed: &mut Vec<u8>,
+) -> Result<bool, anyhow::Error> {
     let mut bad = false;
 
-    let mut fixed = if fix {
-        Vec::with_capacity(contents.len())
-    } else {
-        Vec::new()
-    };
+    fixed.clear();
+    if fix {
+        fixed.reserve(contents.len().saturating_sub(fixed.capacity()));
+    }
     let mut last_end = 0;
 
     let mut line = 1;
@@ -127,11 +141,9 @@ pub(crate) fn lint_patterns<W: Write>(
         }
 
         bad = true;
-        for (i, &b) in contents[scanned..pos].iter().enumerate() {
-            if b == b'\n' {
-                line += 1;
-                line_start = scanned + i + 1;
-            }
+        for nl in memchr_iter(b'\n', &contents[scanned..pos]) {
+            line += 1;
+            line_start = scanned + nl + 1;
         }
         let col = pos - line_start + 1;
         scanned = pos;
@@ -156,7 +168,7 @@ pub(crate) fn lint_patterns<W: Write>(
         fixed.extend_from_slice(&contents[last_end..]);
     }
 
-    Ok((bad, fixed))
+    Ok(bad)
 }
 
 #[cfg(test)]
@@ -183,8 +195,9 @@ mod tests {
         let contents = b"hello world";
         let (ac, pats) = test_ac();
         let mut output = Vec::new();
+        let mut fixed = Vec::new();
 
-        let (bad, fixed) = lint_bytes(path, contents, &ac, &pats, &mut output, true).unwrap();
+        let bad = lint_bytes(path, contents, &ac, &pats, &mut output, true, &mut fixed).unwrap();
         let fixed_str = String::from_utf8(fixed).unwrap();
         expect![[r#"hello world"#]].assert_eq(&fixed_str);
         assert!(!bad);
@@ -196,8 +209,9 @@ mod tests {
         let contents = b"\xEF\xBB\xBFhello world";
         let (ac, pats) = test_ac();
         let mut output = Vec::new();
+        let mut fixed = Vec::new();
 
-        let (bad, fixed) = lint_bytes(path, contents, &ac, &pats, &mut output, true).unwrap();
+        let bad = lint_bytes(path, contents, &ac, &pats, &mut output, true, &mut fixed).unwrap();
         let fixed_str = String::from_utf8(fixed).unwrap();
         expect![[r#"hello world"#]].assert_eq(&fixed_str);
         assert!(bad);
@@ -209,8 +223,9 @@ mod tests {
         let contents = b"some content\n>>>>>>> branch\n";
         let (ac, pats) = test_ac();
         let mut output = Vec::new();
+        let mut fixed = Vec::new();
 
-        let (bad, fixed) = lint_bytes(path, contents, &ac, &pats, &mut output, true).unwrap();
+        let bad = lint_bytes(path, contents, &ac, &pats, &mut output, true, &mut fixed).unwrap();
         let fixed_str = String::from_utf8(fixed).unwrap();
         expect![[r#"some content
  branch
@@ -225,8 +240,9 @@ mod tests {
         let contents = b"some text <<<<<<< HEAD\nmore text ======= here\nand >>>>>>> branch\n";
         let (ac, pats) = test_ac();
         let mut output = Vec::new();
+        let mut fixed = Vec::new();
 
-        let (bad, _fixed) = lint_bytes(path, contents, &ac, &pats, &mut output, false).unwrap();
+        let bad = lint_bytes(path, contents, &ac, &pats, &mut output, false, &mut fixed).unwrap();
         assert!(
             !bad,
             "Merge conflict markers in middle of line should not match"
@@ -239,8 +255,9 @@ mod tests {
         let contents = b"line with trailing space \nline with trailing tab\t\nnext line\n";
         let (ac, pats) = test_ac();
         let mut output = Vec::new();
+        let mut fixed = Vec::new();
 
-        let (bad, fixed) = lint_bytes(path, contents, &ac, &pats, &mut output, true).unwrap();
+        let bad = lint_bytes(path, contents, &ac, &pats, &mut output, true, &mut fixed).unwrap();
         let fixed_str = String::from_utf8(fixed).unwrap();
         expect![[r#"line with trailing space
 line with trailing tab
@@ -256,8 +273,9 @@ next line
         let contents = b"hello FIXME world\nand TODO here\n";
         let (ac, pats) = test_ac_with(&["FIXME", "TODO"]);
         let mut output = Vec::new();
+        let mut fixed = Vec::new();
 
-        let (bad, fixed) = lint_bytes(path, contents, &ac, &pats, &mut output, true).unwrap();
+        let bad = lint_bytes(path, contents, &ac, &pats, &mut output, true, &mut fixed).unwrap();
         let fixed_str = String::from_utf8(fixed).unwrap();
         expect![[r#"hello  world
 and  here

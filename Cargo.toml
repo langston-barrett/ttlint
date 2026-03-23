@@ -11,7 +11,7 @@ homepage = "https://github.com/langston-barrett/ttlint"
 [dependencies]
 aho-corasick = "1.1.4"
 anyhow = "1"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 
 [dev-dependencies]
 expect-test = "1.5"

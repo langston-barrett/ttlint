@@ -21,9 +21,9 @@ struct Args {
     files: Vec<PathBuf>,
 }
 
-const DEFAULT_PATS: &[&str] = &["\n<<<<<<<", "\n=======", "\n>>>>>>>", " \n", "\t\n", "\r"];
+const DEFAULT_PATS: &[&str; 6] = &["\n<<<<<<<", "\n=======", "\n>>>>>>>", " \n", "\t\n", "\r"];
 
-const DEFAULT_MSGS: &[&str] = &[
+const DEFAULT_MSGS: &[&str; 6] = &[
     "merge conflict start marker",
     "merge conflict separator",
     "merge conflict end marker",
